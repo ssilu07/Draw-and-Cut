@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(keytool *)",
+      "Bash(git init *)",
+      "Bash(git branch *)",
+      "Bash(git remote *)",
+      "Bash(ls app/keystore/)",
+      "Bash(ls app/src/main/res/drawable/)",
+      "Bash(git add *)"
+    ]
+  }
+}

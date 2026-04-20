@@ -1,0 +1,76 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.royals.drawandcut'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.royals.drawandcut"
+        minSdk 21
+        targetSdk 35
+        versionCode 2
+        versionName "1.1"
+    }
+
+    flavorDimensions "environment"
+    productFlavors {
+        dev {
+            dimension "environment"
+            resValue "string", "admob_app_id", "ca-app-pub-3940256099942544~3347511713"
+            buildConfigField "String", "BANNER_AD_ID", "\"ca-app-pub-3940256099942544/6300978111\""
+            buildConfigField "String", "INTERSTITIAL_AD_ID", "\"ca-app-pub-3940256099942544/1033173712\""
+            buildConfigField "String", "REWARDED_AD_ID", "\"ca-app-pub-3940256099942544/5224354917\""
+        }
+        prod {
+            dimension "environment"
+            resValue "string", "admob_app_id", "ca-app-pub-1811294933992844~1152886483"
+            buildConfigField "String", "BANNER_AD_ID", "\"ca-app-pub-1811294933992844/8601813271\""
+            buildConfigField "String", "INTERSTITIAL_AD_ID", "\"ca-app-pub-1811294933992844/3980041986\""
+            buildConfigField "String", "REWARDED_AD_ID", "\"ca-app-pub-1811294933992844/9524224731\""
+        }
+    }
+
+    signingConfigs {
+        debug {
+            // uses default debug keystore automatically
+        }
+        release {
+            storeFile file("keystore/release.keystore")
+            storePassword "8750257510"
+            keyAlias "key0"
+            keyPassword "8750257510"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+            debuggable true
+            minifyEnabled false
+        }
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.gms:play-services-ads:23.1.0'
+}
