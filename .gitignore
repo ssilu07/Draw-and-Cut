@@ -7,3 +7,8 @@ app/build
 app/keystore/
 *.keystore
 *.jks
+release-outputs/
+keystore-base64.txt
+service-account.json
+*.apk
+*.aab

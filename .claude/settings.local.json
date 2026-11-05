@@ -7,7 +7,13 @@
       "Bash(git remote *)",
       "Bash(ls app/keystore/)",
       "Bash(ls app/src/main/res/drawable/)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Read(//mnt/d/htmlgames/**)",
+      "Bash(./gradlew --stop)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(keytool *)"
     ]
   }
 }

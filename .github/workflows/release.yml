@@ -1,0 +1,201 @@
+name: Build & Release Android App
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish as official GitHub Release?'
+        required: true
+        type: boolean
+        default: true
+      play_track:
+        description: 'Google Play Track (if secret configured)'
+        required: false
+        type: choice
+        default: 'internal'
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+      prerelease:
+        description: 'Mark as pre-release?'
+        required: false
+        type: boolean
+        default: false
+      custom_release_notes:
+        description: 'Custom release notes / description (optional)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Make gradlew Executable
+        run: chmod +x gradlew
+
+      - name: Extract Version Info
+        id: version_info
+        run: |
+          VERSION_CODE=$(grep -E 'versionCode\s+[0-9]+' app/build.gradle | head -1 | awk '{print $2}')
+          VERSION_NAME=$(grep -E 'versionName\s+"[^"]+"' app/build.gradle | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          
+          if [ -z "$VERSION_CODE" ]; then VERSION_CODE="1"; fi
+          if [ -z "$VERSION_NAME" ]; then VERSION_NAME="1.0"; fi
+          
+          # If triggered by a tag (e.g. v1.2), use the tag name for release tag, else v<versionName>
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          else
+            RELEASE_TAG="v${VERSION_NAME}"
+          fi
+          
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+          echo "Found Version: Name=$VERSION_NAME, Code=$VERSION_CODE, Tag=$RELEASE_TAG"
+
+      - name: Decode Keystore (or generate fallback)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Decoding Keystore from GitHub Secret..."
+            echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/keystore.jks"
+            echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/keystore.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD:-8750257510}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${KEY_ALIAS:-key0}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${KEY_PASSWORD:-8750257510}" >> $GITHUB_ENV
+            echo "Keystore successfully configured for signing."
+          else
+            echo "KEYSTORE_BASE64 secret not found. Generating temporary signing key for CI..."
+            keytool -genkey -v -keystore "$GITHUB_WORKSPACE/keystore.jks" -alias key0 -keyalg RSA -keysize 2048 -validity 10000 -storepass 8750257510 -keypass 8750257510 -dname "CN=DrawAndCut, OU=Dev, O=Royals, L=City, S=State, C=IN"
+            echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/keystore.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=8750257510" >> $GITHUB_ENV
+            echo "KEY_ALIAS=key0" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=8750257510" >> $GITHUB_ENV
+          fi
+
+      - name: Build Release APK and AAB
+        run: ./gradlew assembleProdRelease bundleProdRelease --stacktrace
+
+      - name: Package Release Assets
+        run: |
+          mkdir -p release_assets
+          
+          # Copy APK
+          if [ -f "app/build/outputs/apk/prod/release/app-prod-release.apk" ]; then
+            cp "app/build/outputs/apk/prod/release/app-prod-release.apk" "release_assets/DrawAndCut-${RELEASE_TAG}-build${VERSION_CODE}.apk"
+          fi
+          
+          # Copy AAB
+          if [ -f "app/build/outputs/bundle/prodRelease/app-prod-release.aab" ]; then
+            cp "app/build/outputs/bundle/prodRelease/app-prod-release.aab" "release_assets/DrawAndCut-${RELEASE_TAG}-build${VERSION_CODE}.aab"
+          fi
+          
+          # Generate Checksums
+          cd release_assets
+          sha256sum DrawAndCut-* > checksums.txt 2>/dev/null || true
+          ls -la
+
+      - name: Upload Artifacts to Workflow Run
+        uses: actions/upload-artifact@v4
+        with:
+          name: DrawAndCut-${{ env.RELEASE_TAG }}
+          path: release_assets/
+          retention-days: 30
+
+      - name: Determine If Release Should Be Created
+        id: check_release
+        run: |
+          SHOULD_RELEASE="false"
+          
+          # Only create official GitHub Release on tag push or manual dispatch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.create_release }}" = "true" ]; then
+            SHOULD_RELEASE="true"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            SHOULD_RELEASE="true"
+          fi
+          
+          echo "SHOULD_RELEASE=$SHOULD_RELEASE" >> $GITHUB_ENV
+          echo "Create Release Decision: $SHOULD_RELEASE"
+
+      - name: Publish GitHub Release
+        if: env.SHOULD_RELEASE == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Draw & Cut ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: ${{ inputs.prerelease || false }}
+          generate_release_notes: true
+          make_latest: true
+          body: |
+            ${{ inputs.custom_release_notes }}
+            
+            ### ✂️ Draw & Cut Release ${{ env.RELEASE_TAG }}
+            - **Installable APK**: Direct installation on Android devices (`.apk`)
+            - **Google Play Bundle**: Ready for Google Play Console upload (`.aab`)
+            - **Integrity**: Verify with `checksums.txt` (SHA-256 hash)
+          files: |
+            release_assets/DrawAndCut-*.apk
+            release_assets/DrawAndCut-*.aab
+            release_assets/checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Google Play Credentials
+        env:
+          PLAY_KEY_1: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          PLAY_KEY_2: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$PLAY_KEY_1" ]; then
+            echo "Google Play credentials detected from PLAY_STORE_JSON_KEY."
+            echo "$PLAY_KEY_1" > "$GITHUB_WORKSPACE/service-account.json"
+            echo "HAVE_PLAY_SECRET=true" >> $GITHUB_ENV
+          elif [ -n "$PLAY_KEY_2" ]; then
+            echo "Google Play credentials detected from PLAY_SERVICE_ACCOUNT_JSON."
+            echo "$PLAY_KEY_2" > "$GITHUB_WORKSPACE/service-account.json"
+            echo "HAVE_PLAY_SECRET=true" >> $GITHUB_ENV
+          else
+            echo "No Google Play service account secret found. Skipping Play Store upload."
+            echo "HAVE_PLAY_SECRET=false" >> $GITHUB_ENV
+          fi
+
+      - name: Upload to Google Play Store
+        if: env.SHOULD_RELEASE == 'true' && env.HAVE_PLAY_SECRET == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJson: ${{ github.workspace }}/service-account.json
+          packageName: com.royals.drawandcut
+          releaseFiles: release_assets/DrawAndCut-*.aab
+          track: ${{ inputs.play_track || vars.PLAY_TRACK || 'internal' }}
+          mappingFile: app/build/outputs/mapping/prodRelease/mapping.txt
+          status: completed

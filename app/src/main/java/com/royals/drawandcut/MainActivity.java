@@ -2,7 +2,11 @@ package com.royals.drawandcut;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Context;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Vibrator;
+import android.os.VibrationEffect;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
@@ -170,6 +174,22 @@ public class MainActivity extends Activity {
                     interstitialAd.show(MainActivity.this);
                 }
             });
+        }
+
+        @JavascriptInterface
+        public void vibrate(long milliseconds) {
+            try {
+                Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                if (v != null && v.hasVibrator()) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        v.vibrate(VibrationEffect.createOneShot(milliseconds, VibrationEffect.DEFAULT_AMPLITUDE));
+                    } else {
+                        v.vibrate(milliseconds);
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Vibrate error: " + e.getMessage());
+            }
         }
     }
 
