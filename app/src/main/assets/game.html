@@ -28,7 +28,14 @@
 }
 html,body{width:100%;height:100%;overflow:hidden;touch-action:none;
   user-select:none;-webkit-user-select:none;background:var(--bg);
-  font-family:'DM Sans',sans-serif;color:var(--text);}
+  font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--text);}
+
+button, .mbtn, .btn, .skin-btn, .hpill{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+  -webkit-user-select:none;
+}
 
 /* ── SCREENS ── */
 .screen{position:fixed;inset:0;z-index:10;
@@ -345,7 +352,7 @@ let G={
 /* ══════════════════════════════════════════
    SOUND  (Web Audio — no files needed)
 ══════════════════════════════════════════ */
-let audioCtx=null, soundOn=true;
+let audioCtx=null, soundOn = localStorage.getItem('dc3_sound') !== '0';
 function getAC(){
   if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
   if(audioCtx.state==='suspended')audioCtx.resume();
@@ -756,6 +763,9 @@ function refreshMenu(){
   const mg=document.getElementById('menu-gems-val');
   if(mg)mg.textContent=typeof getGems==='function'?getGems():0;
 
+  const sndBtn = document.getElementById('btn-sound');
+  if(sndBtn) sndBtn.textContent = (soundOn ? '🔊' : '🔇') + ' Sound: ' + (soundOn ? 'ON' : 'OFF');
+
   const spinBadge=document.getElementById('spin-badge');
   if(spinBadge){
     if(typeof canFreeSpin==='function'&&canFreeSpin()){
@@ -812,6 +822,7 @@ document.getElementById('btn-shop-back').addEventListener('click',()=>{
 });
 document.getElementById('btn-sound').addEventListener('click',()=>{
   soundOn=!soundOn;
+  localStorage.setItem('dc3_sound', soundOn ? '1' : '0');
   document.getElementById('btn-sound').textContent=(soundOn?'🔊':'🔇')+' Sound: '+(soundOn?'ON':'OFF');
   if(soundOn)SFX.click();
 });
@@ -836,7 +847,24 @@ function resize(){
   GH=cv.height=innerHeight;
 }
 resize();
-window.addEventListener('resize',()=>{resize();if(G.phase==='playing')initLevel();});
+window.addEventListener('resize',()=>{
+  resize();
+  // Safely keep game state without restarting the level
+  if(G.phase==='playing'){
+    if(G.balls){
+      for(const b of G.balls){
+        b.x=Math.max(b.r+12, Math.min(GW-b.r-12, b.x));
+        b.y=Math.max(b.r+64, Math.min(GH-b.r-12, b.y));
+      }
+    }
+    if(G.blades){
+      for(const bl of G.blades){
+        bl.x=Math.max(bl.tipRadius+12, Math.min(GW-bl.tipRadius-12, bl.x));
+        bl.y=Math.max(bl.tipRadius+64, Math.min(GH-bl.tipRadius-12, bl.y));
+      }
+    }
+  }
+});
 
 /* ══════════════════════════════════════════
    GAME STATE
@@ -2012,6 +2040,10 @@ cv.addEventListener('mousemove',onMove);
 cv.addEventListener('touchmove',e=>{e.preventDefault();onMove(e);},{passive:false});
 cv.addEventListener('mouseup',onUp);
 cv.addEventListener('touchend',e=>{e.preventDefault();onUp(e);},{passive:false});
+// Ensure lifting finger outside canvas safely locks circle
+window.addEventListener('mouseup',onUp);
+window.addEventListener('touchend',onUp,{passive:true});
+window.addEventListener('touchcancel',onUp,{passive:true});
 
 function onDown(e){
   if(G.phase!=='playing')return;
@@ -2231,14 +2263,19 @@ function levelWon(){
 function shareRecord(isWin){
   SFX.click();
   const text = isWin
-    ? `⚡ I just captured ${Math.round(G.pct)}% of Level ${G.level} in Draw & Cut with a score of ${G.score} pts! Can you beat my record? 🎮🔥`
-    : `🎮 I scored ${G.score} pts (Best: ${G.best}) in Draw & Cut! Expanding cyber bubbles is so addictive. Think you can beat me? 🚀`;
+    ? `⚡ I just captured ${Math.round(G.pct)}% of Level ${G.level} in Draw & Cut: Expand & Fill with ${G.score} pts! Can you beat my record? 🎮🔥`
+    : `🎮 I scored ${G.score} pts (Best: ${G.best}) in Draw & Cut: Expand & Fill! Expanding cyber bubbles is addictive. Can you beat my score? 🚀`;
 
+  if(typeof Android !== 'undefined' && Android.share){
+    Android.share('Draw & Cut: Expand & Fill', text);
+    vibrate([30,20,40]);
+    return;
+  }
   if(navigator.share){
     navigator.share({
-      title: 'Draw & Cut',
+      title: 'Draw & Cut: Expand & Fill',
       text: text,
-      url: window.location.href
+      url: 'https://play.google.com/store/apps/details?id=com.royals.drawandcut'
     }).catch(()=>{});
   }else if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(()=>{
@@ -2269,18 +2306,6 @@ function showOv(type,pct,gemsEarned){
       <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,215,0,0.15);border:1.5px solid #ffd700;border-radius:99px;padding:6px 18px;font-family:'Righteous',cursive;font-size:1.05rem;color:#ffd700;box-shadow:0 0 16px rgba(255,215,0,0.3);margin:4px 0 14px;">+${gemsEarned||35} 💎 GEMS!</div>
       <button class="btn bgo" id="ob1" style="width:100%;max-width:280px;margin-bottom:8px;">NEXT LEVEL →</button>
       <button class="btn bgray" id="ob-share-win" style="width:100%;max-width:280px;padding:10px 20px;font-size:0.8rem;background:rgba(255,255,255,0.08);">📤 SHARE VICTORY</button>`;
-    setTimeout(()=>{
-      document.getElementById('ob1')?.addEventListener('click',()=>{
-        SFX.click();removeOverlay();G.level++;
-        if(G.level % 2 === 0 && typeof Android!=='undefined' && Android.showInterstitialAd){
-          Android.showInterstitialAd();
-        }
-        const nextCfg=genLevel(G.level);
-        G.lives=nextCfg.lives; // restore lives for next level
-        initLevel();
-      });
-      document.getElementById('ob-share-win')?.addEventListener('click',()=>shareRecord(true));
-    },80);
   }else{
     const showAdBtn=typeof Android!=='undefined';
     d.innerHTML=`<div class="ot lose">GAME OVER</div>
@@ -2293,27 +2318,108 @@ function showOv(type,pct,gemsEarned){
         <button class="btn bgray" id="ob3" style="flex:1;">MENU</button>
       </div>
       <button class="btn bgray" id="ob-share-lose" style="width:100%;max-width:280px;padding:10px 20px;font-size:0.8rem;background:rgba(255,255,255,0.08);">📤 SHARE SCORE</button>`;
-    setTimeout(()=>{
-      document.getElementById('ob4')?.addEventListener('click',()=>{
+  }
+  document.body.appendChild(d);
+
+  // Synchronous, zero-lag button attachment
+  if(type==='win'){
+    const btnNext = document.getElementById('ob1');
+    const btnShare = document.getElementById('ob-share-win');
+    if(btnNext){
+      btnNext.onclick = (e)=>{
+        e.preventDefault();
+        SFX.click();removeOverlay();G.level++;
+        if(G.level % 2 === 0 && typeof Android!=='undefined' && Android.showInterstitialAd){
+          Android.showInterstitialAd();
+        }
+        const nextCfg=genLevel(G.level);
+        G.lives=nextCfg.lives;
+        initLevel();
+      };
+    }
+    if(btnShare){
+      btnShare.onclick = (e)=>{
+        e.preventDefault();
+        shareRecord(true);
+      };
+    }
+  }else{
+    const btnAd = document.getElementById('ob4');
+    const btnRetry = document.getElementById('ob2');
+    const btnMenu = document.getElementById('ob3');
+    const btnShare = document.getElementById('ob-share-lose');
+    if(btnAd){
+      btnAd.onclick = (e)=>{
+        e.preventDefault();
         SFX.click();
         if(typeof Android!=='undefined'){Android.showRewardedAd();}
-      });
-      document.getElementById('ob2')?.addEventListener('click',()=>{
+      };
+    }
+    if(btnRetry){
+      btnRetry.onclick = (e)=>{
+        e.preventDefault();
         SFX.click();
         if(typeof Android!=='undefined'&&Android.showInterstitialAd){Android.showInterstitialAd();}
         clearSave();removeOverlay();G.score=0;G.lives=3;G.level=1;G.combo=0;initLevel();
-      });
-      document.getElementById('ob3')?.addEventListener('click',()=>{
+      };
+    }
+    if(btnMenu){
+      btnMenu.onclick = (e)=>{
+        e.preventDefault();
         SFX.click();
         if(typeof Android!=='undefined'&&Android.showInterstitialAd){Android.showInterstitialAd();}
         clearSave();removeOverlay();
         refreshMenu();showScreen('menu');G.phase='paused';
-      });
-      document.getElementById('ob-share-lose')?.addEventListener('click',()=>shareRecord(false));
-    },80);
+      };
+    }
+    if(btnShare){
+      btnShare.onclick = (e)=>{
+        e.preventDefault();
+        shareRecord(false);
+      };
+    }
   }
-  document.body.appendChild(d);
 }
+
+/* ══════════════════════════════════════════
+   NATIVE ANDROID BACK BUTTON HANDLER
+══════════════════════════════════════════ */
+window.handleAndroidBack = function(){
+  // 1. Overlay open -> close it, return to menu
+  const ov = document.getElementById('overlay');
+  if(ov){
+    removeOverlay();
+    refreshMenu();
+    showScreen('menu');
+    G.phase='paused';
+    return "handled";
+  }
+  // 2. Spin modal open -> return to menu
+  const spinModal = document.getElementById('spin-modal');
+  if(spinModal && !spinModal.classList.contains('hidden')){
+    refreshMenu();
+    showScreen('menu');
+    return "handled";
+  }
+  // 3. Shop open -> return to menu
+  const shop = document.getElementById('shop');
+  if(shop && !shop.classList.contains('hidden')){
+    refreshMenu();
+    showScreen('menu');
+    return "handled";
+  }
+  // 4. In-game active -> save progress and return to menu
+  const game = document.getElementById('game');
+  if(game && !game.classList.contains('hidden')){
+    saveGame();
+    refreshMenu();
+    showScreen('menu');
+    G.phase='paused';
+    return "handled";
+  }
+  // 5. Already on menu -> return exit so Android exits cleanly
+  return "exit";
+};
 function removeOverlay(){document.getElementById('overlay')?.remove();}
 
 /* ══════════════════════════════════════════

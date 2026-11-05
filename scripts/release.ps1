@@ -231,7 +231,7 @@ if (-not $SkipPush) {
     Write-Host "`nGit Status & Publishing..." -ForegroundColor Cyan
     
     # Check if there are changes to commit
-    git add app/
+    git add app/ scripts/
     $staged = git diff --cached --name-only
     
     if ($staged) {

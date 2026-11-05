@@ -3,6 +3,7 @@ package com.royals.drawandcut;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Vibrator;
@@ -11,6 +12,7 @@ import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -78,7 +80,15 @@ public class MainActivity extends Activity {
 
         webView.addJavascriptInterface(new GameBridge(), "Android");
         webView.setWebViewClient(new WebViewClient());
-        webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+                Log.d(TAG, "[WebConsole] " + consoleMessage.message() + " -- line "
+                        + consoleMessage.lineNumber() + " of "
+                        + consoleMessage.sourceId());
+                return true;
+            }
+        });
         webView.loadUrl("file:///android_asset/game.html");
 
         loadBannerAd();
@@ -179,6 +189,21 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void share(String title, String text) {
+            runOnUiThread(() -> {
+                try {
+                    Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                    shareIntent.setType("text/plain");
+                    shareIntent.putExtra(Intent.EXTRA_SUBJECT, title != null ? title : "Draw & Cut");
+                    shareIntent.putExtra(Intent.EXTRA_TEXT, (text != null ? text : "") + "\n\nPlay Draw & Cut on Google Play: https://play.google.com/store/apps/details?id=com.royals.drawandcut");
+                    startActivity(Intent.createChooser(shareIntent, "Share Draw & Cut"));
+                } catch (Exception e) {
+                    Log.e(TAG, "Share error: " + e.getMessage());
+                }
+            });
+        }
+
+        @JavascriptInterface
         public void vibrate(long milliseconds) {
             try {
                 Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
@@ -197,12 +222,21 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
+        if (webView != null) {
+            webView.evaluateJavascript(
+                "if (typeof handleAndroidBack === 'function') { handleAndroidBack(); } else { 'exit'; }",
+                value -> {
+                    // value is returned as a JSON string from evaluateJavascript
+                    boolean shouldExit = (value == null || "\"exit\"".equals(value) || "\"unhandled\"".equals(value));
+                    if (shouldExit) {
+                        if (interstitialAd != null) {
+                            interstitialAd.show(MainActivity.this);
+                        }
+                        MainActivity.super.onBackPressed();
+                    }
+                }
+            );
         } else {
-            if (interstitialAd != null) {
-                interstitialAd.show(this);
-            }
             super.onBackPressed();
         }
     }

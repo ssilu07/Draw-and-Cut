@@ -22,7 +22,7 @@ def main():
     parser.add_argument('--package', default=DEFAULT_PKG, help="Package Name")
     parser.add_argument('--track', default='production', choices=['production', 'internal', 'alpha', 'beta'], help="Release Track")
     parser.add_argument('--mapping', default=None, help="Path to ProGuard / R8 mapping.txt (optional)")
-    parser.add_argument('--notes', default="Bug fixes, performance improvements, cyber UI enhancements, and new game balance.", help="Release notes in en-US")
+    parser.add_argument('--notes', default="Major update: Instant button responsiveness, seamless back navigation, 1-tap score sharing, gameplay stability, and performance optimizations.", help="Release notes in en-US")
     args = parser.parse_args()
 
     if not os.path.exists(args.aab):
