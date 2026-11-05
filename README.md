@@ -59,7 +59,7 @@ To allow GitHub Actions to sign your releases with your official production key:
 
 ### 💻 Method 2: Local 1-Click Release Script
 
-You can also build, package, increment version, and push directly from your computer:
+You can also build, package, increment version, upload to Google Play Console, and push directly from your computer:
 
 #### Windows Double-Click:
 - Double-click [`release.bat`](file:///d:/htmlgames/DrawAndCut/release.bat).
@@ -70,8 +70,8 @@ You can also build, package, increment version, and push directly from your comp
 .\scripts\release.ps1
 
 # Or specify bump type directly:
-.\scripts\release.ps1 -Bump minor    # 1.1 -> 1.2
-.\scripts\release.ps1 -Bump patch    # 1.1 -> 1.1.1
+.\scripts\release.ps1 -Bump minor    # 1.2 -> 1.3
+.\scripts\release.ps1 -Bump patch    # 1.2 -> 1.2.1
 .\scripts\release.ps1 -NewVersion "2.0"
 
 # Local build only without committing or pushing:
@@ -83,7 +83,17 @@ You can also build, package, increment version, and push directly from your comp
 2. Builds optimized, minified, and signed `assembleProdRelease` (.apk) and `bundleProdRelease` (.aab).
 3. Packages outputs into `release-outputs/v<version>/` with version stamps.
 4. Computes SHA-256 checksums in `checksums.txt`.
-5. Commits `app/build.gradle`, tags `v<version>`, and pushes to GitHub (triggering the online GitHub Release).
+5. **Directly uploads the App Bundle and ProGuard mapping file to Google Play Console (Production track)** via Google Play Developer API.
+6. Commits `app/build.gradle`, tags `v<version>`, and pushes to GitHub.
+
+---
+
+### 🌐 Direct Google Play Console Uploader Script
+
+Upload any `.aab` directly to Google Play Console:
+```powershell
+python .\scripts\upload-playstore.py --aab .\release-outputs\v1.2\DrawAndCut-v1.2-build7.aab --track production
+```
 
 ---
 

@@ -207,12 +207,31 @@ Write-Host "  [CHECKSUM] checksums.txt created" -ForegroundColor Gray
 
 Write-Host "`nArtifacts saved in: $outputDir" -ForegroundColor Cyan
 
+# 5.5 Optional Direct Google Play Upload
+$playKeyCandidates = @(
+    "D:\htmlgames\TangledLine\play-key.json.json",
+    (Join-Path $ProjectRoot "service-account.json")
+)
+$playKey = $null
+foreach ($pk in $playKeyCandidates) {
+    if (Test-Path $pk) { $playKey = $pk; break }
+}
+if ($playKey -and (Test-Path $aabDest)) {
+    Write-Host "`n🚀 Direct Uploading to Google Play Console..." -ForegroundColor Cyan
+    try {
+        $uploadScript = Join-Path $ScriptDir "upload-playstore.py"
+        python $uploadScript --aab $aabDest --key $playKey --track production
+    } catch {
+        Write-Warning "Direct Play Store upload encountered an error: $_"
+    }
+}
+
 # 6. Git Commit & Push & Tag
 if (-not $SkipPush) {
     Write-Host "`nGit Status & Publishing..." -ForegroundColor Cyan
     
     # Check if there are changes to commit
-    git add app/build.gradle
+    git add app/
     $staged = git diff --cached --name-only
     
     if ($staged) {
