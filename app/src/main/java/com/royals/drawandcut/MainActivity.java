@@ -172,6 +172,8 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (interstitialAd != null) {
                     interstitialAd.show(MainActivity.this);
+                } else {
+                    loadInterstitialAd();
                 }
             });
         }
